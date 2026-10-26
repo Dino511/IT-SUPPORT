@@ -3,7 +3,7 @@
 
 @section('content')
 <div class="row g-3">
-    <div class="col-lg-3">
+    <div class="col-lg-3 col-xxl-auto master-nav">
         <div class="card">
             <div class="list-group list-group-flush">
                 <a href="{{ route('admin.master.index') }}" class="list-group-item list-group-item-action {{ $category === 'companies' ? 'active' : '' }}">
@@ -23,7 +23,7 @@
         <p class="small text-muted mt-3">These lists feed the dropdowns on the device and employee forms. Admins can only pick from them. You can also add a new option by typing it in any form dropdown.</p>
     </div>
 
-    <div class="col-lg-9">
+    <div class="col-lg-9 col-xxl">
     @if($category === 'companies')
         <div class="card mb-3">
             <div class="card-header bg-white"><strong>Add Company</strong></div>
@@ -38,22 +38,23 @@
 
         <div class="card">
             <div class="table-responsive">
-                <table class="table mb-0">
-                    <thead class="table-light"><tr><th style="width:110px">Code</th><th>Name</th><th style="width:140px">Country</th><th>Address</th><th class="text-center">Employees</th><th class="text-center">Devices</th><th>Active</th><th></th></tr></thead>
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th style="min-width:84px;width:92px">Code</th><th style="min-width:130px">Name</th><th style="min-width:110px;width:150px">Country</th><th style="min-width:140px">Address</th><th style="width:64px">Active</th><th style="width:76px"></th></tr></thead>
                     <tbody>
                     @forelse($companies as $c)
                         <tr class="{{ $c->is_active ? '' : 'table-secondary' }}">
-                            <td><input name="code" value="{{ $c->code }}" class="form-control form-control-sm text-uppercase" form="co-{{ $c->id }}" required maxlength="20"></td>
-                            <td><input name="name" value="{{ $c->name }}" class="form-control form-control-sm" form="co-{{ $c->id }}" required maxlength="150"></td>
-                            <td><input name="country" value="{{ $c->country }}" class="form-control form-control-sm" form="co-{{ $c->id }}" maxlength="100"></td>
-                            <td><input name="address" value="{{ $c->address }}" class="form-control form-control-sm" form="co-{{ $c->id }}" maxlength="255"></td>
-                            <td class="text-center">{{ $c->employees_count }}</td>
-                            <td class="text-center">{{ $c->devices_count }}</td>
-                            <td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="is_active" value="1" form="co-{{ $c->id }}" @checked($c->is_active)></div></td>
+                            <td><input name="code" value="{{ $c->code }}" class="form-control form-control-sm text-uppercase" form="co-{{ $c->id }}" required maxlength="20" aria-label="Code"></td>
+                            <td>
+                                <input name="name" value="{{ $c->name }}" class="form-control form-control-sm" form="co-{{ $c->id }}" required maxlength="150" aria-label="Company name">
+                                <div class="small text-muted mt-1">{{ $c->employees_count }} {{ Str::plural('person', $c->employees_count) }} · {{ $c->devices_count }} {{ Str::plural('device', $c->devices_count) }}</div>
+                            </td>
+                            <td><input name="country" value="{{ $c->country }}" class="form-control form-control-sm" form="co-{{ $c->id }}" maxlength="100" aria-label="Country"></td>
+                            <td><input name="address" value="{{ $c->address }}" class="form-control form-control-sm" form="co-{{ $c->id }}" maxlength="255" aria-label="Address"></td>
+                            <td><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="is_active" value="1" form="co-{{ $c->id }}" @checked($c->is_active) aria-label="Active"></div></td>
                             <td><button class="btn btn-sm btn-outline-primary" form="co-{{ $c->id }}">Save</button></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="text-center text-muted py-4">No companies yet.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">No companies yet.</td></tr>
                     @endforelse
                     </tbody>
                 </table>
@@ -79,7 +80,7 @@
 
         <div class="card">
             <div class="table-responsive">
-                <table class="table mb-0">
+                <table class="table table-sm mb-0">
                     <thead class="table-light"><tr><th>Name</th><th style="width:110px">Prefix</th><th>Spec fields</th><th class="text-center">Devices</th><th>Next tag</th><th>Active</th><th></th></tr></thead>
                     <tbody>
                     @foreach($deviceTypes as $t)

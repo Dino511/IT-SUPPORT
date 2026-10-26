@@ -183,6 +183,7 @@
     document.querySelectorAll('select[data-combo]').forEach(initCombo);
 </script>
 @include('partials.theme-toggle')
+@include('partials.full-text-tips')
 @stack('scripts')
 </body>
 </html>

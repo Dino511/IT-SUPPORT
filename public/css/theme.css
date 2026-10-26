@@ -371,6 +371,9 @@ td.fw-semibold, td.mono { white-space: nowrap; }
     transition: box-shadow var(--fast), border-color var(--fast);
 }
 .form-control-sm, .form-select-sm { min-height: 34px; padding: .3rem .6rem; border-radius: 8px; font-size: .86rem; }
+/* keep room for the dropdown arrow so text never runs under it */
+.form-select { padding-right: 2.25rem; }
+.form-select-sm { padding-right: 2rem; }
 .form-control::placeholder { color: var(--muted); opacity: .75; }
 .form-control:focus, .form-select:focus { background-color: var(--surface); color: var(--text); border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, .2); }
 .form-control[readonly] { background: var(--surface-alt); font-family: var(--font-mono); font-weight: 700; }
@@ -400,6 +403,17 @@ td.fw-semibold, td.mono { white-space: nowrap; }
 .ts-dropdown .active { background: var(--pill-primary-bg) !important; color: var(--text) !important; }
 .ts-dropdown .create { color: var(--link); }
 .ts-wrapper .clear-button { color: var(--muted); }
+
+/* Master Data: fixed-width menu on wide screens so the tables get the rest */
+@media (min-width: 1400px) { .master-nav { width: 270px; } }
+.list-group-item.d-flex { align-items: center; }
+/* upper-case inputs (codes, prefixes) keep a normal-case placeholder */
+.text-uppercase::placeholder { text-transform: none; }
+
+/* full-text tooltip for cut-off fields (partials/full-text-tips) */
+.full-text-tip { --bs-tooltip-bg: var(--navy); --bs-tooltip-color: #fff; --bs-tooltip-max-width: 440px; --bs-tooltip-font-size: .85rem; --bs-tooltip-padding-x: .75rem; --bs-tooltip-padding-y: .5rem; --bs-tooltip-border-radius: 8px; --bs-tooltip-opacity: 1; }
+.full-text-tip .tooltip-inner { text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: var(--elev-2); }
+[data-bs-theme="dark"] .full-text-tip { --bs-tooltip-bg: #e8ecf8; --bs-tooltip-color: #0b1020; }
 
 /* ---------- alerts, lists, tabs, modals, pagination ------------------------ */
 
