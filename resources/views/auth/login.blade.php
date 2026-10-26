@@ -71,5 +71,6 @@
     });
 </script>
 @include('partials.theme-toggle')
+@include('partials.connection-status')
 </body>
 </html>

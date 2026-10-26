@@ -618,9 +618,46 @@ a.hbar-row:hover { background: var(--row-hover); color: var(--text); }
 .login-card { width: 100%; max-width: 420px; }
 @media (max-width: 991.98px) { .brand-panel { padding: 1.75rem 1.25rem; gap: 1.5rem; } .brand-panel .feature-list { display: none; } }
 
+/* ---------- connection status (partials/connection-status) ---------------- */
+
+/* card in the bottom-right corner; --tone is set by .tone-* */
+.conn-status {
+    position: fixed; right: 1rem; bottom: 1rem; z-index: 1070;
+    display: flex; align-items: flex-start; gap: .75rem;
+    width: min(390px, calc(100vw - 2rem)); padding: .85rem .9rem .85rem 1rem;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--line-strong); border-left: 4px solid var(--tone); border-radius: var(--radius);
+    box-shadow: var(--elev-2);
+    animation: rise .25s var(--ease) both;
+}
+.conn-status[hidden] { display: none; }
+.conn-status.tone-danger { --tone: var(--rose-strong); }
+.conn-status.tone-info { --tone: var(--amber); }
+.conn-status.tone-success { --tone: var(--emerald); }
+.conn-ico { color: var(--tone); font-size: 1.3rem; line-height: 1; margin-top: .1rem; }
+.conn-body { flex: 1; min-width: 0; }
+.conn-title { display: block; font-weight: 700; }
+.conn-msg { display: block; margin-top: .15rem; font-size: .85rem; color: var(--muted); }
+.conn-retry { display: flex; align-items: center; gap: .4rem; margin-top: .4rem; font-size: .78rem; color: var(--muted); }
+.conn-retry[hidden] { display: none; }
+.conn-spinner { width: .8rem; height: .8rem; border: 2px solid var(--line-strong); border-top-color: var(--tone); border-radius: 50%; animation: conn-spin .9s linear infinite; }
+.conn-btn {
+    align-self: center; flex-shrink: 0; padding: .3rem .7rem; font-size: .8rem; font-weight: 600;
+    color: var(--text); background: var(--surface-alt); border: 1px solid var(--line-strong); border-radius: 8px;
+}
+.conn-btn:hover { border-color: var(--tone); }
+.conn-x { flex-shrink: 0; padding: .1rem .3rem; color: var(--muted); background: none; border: 0; border-radius: 6px; }
+.conn-x:hover { color: var(--text); background: var(--surface-alt); }
+.conn-btn:focus-visible, .conn-x:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* a form was submitted while still disconnected: draw the eye back to the card */
+.conn-status.conn-nudge { animation: conn-nudge .45s var(--ease); }
+@media (max-width: 575.98px) { .conn-status { left: .75rem; right: .75rem; bottom: .75rem; width: auto; } }
+
 /* ---------- motion ------------------------------------------------------ */
 
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes conn-spin { to { transform: rotate(360deg); } }
+@keyframes conn-nudge { 0%, 100% { transform: none; } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

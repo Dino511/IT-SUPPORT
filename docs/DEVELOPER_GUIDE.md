@@ -252,6 +252,7 @@ Uploaded in the device form (`po_file`: pdf, jpg, png, doc(x), xls(x), max 10 MB
   To upgrade one, download the same files for the new version from npm (or `cdn.jsdelivr.net/npm/<package>@<version>/…`), replace them in the folder, keep its `LICENSE`, and update the version in this table. The `.map` files only help browser dev tools.
 - **Components:** `<x-status :value="$device->status" />` renders a status pill. `<x-combo name="brand" :options="$list" :value="$current" required />` renders a master-data dropdown.
 - **Dynamic forms:** the device form shows spec fields according to the device type, and filters models by the selected brand. The request form fills the device list and the employee snapshot from JSON passed by the controller. The scripts are inline at the bottom of each view (`@push('scripts')`).
+- **Connection card:** `partials/connection-status` (in the layout and on the sign-in page) polls `GET /connection-status` every 20 s, every 5 s while there is a problem, and at once when the PC goes on/offline or the tab comes back. It shows a bottom-right card only when something is off: PC offline, server unreachable, database not responding, maintenance mode, or **offline mode** (no internet, the app still works on the LAN; can be hidden), then "Connection restored". While there is a problem, a submitted form is re-checked first and held if still down, so typed entries are not lost. `ConnectionStatusController` answers `{server, database, internet}`. `internet` is a TCP connect to 1.1.1.1 / 8.8.8.8 port 443, cached 60 s in the file cache, and is the app's only outgoing connection. The route is registered in `bootstrap/app.php` outside the `web` group, so polling never starts or extends a session.
 
 ---
 
@@ -270,6 +271,7 @@ Uploaded in the device form (`po_file`: pdf, jpg, png, doc(x), xls(x), max 10 MB
 | GET `/admin/audit-logs`, `/admin/audit-logs/export` | `admin.audit.*` | same filters for both |
 | `/admin/master-data*` | `admin.master.*` | **super admin** |
 | resource `/admin/users` (no show/destroy) | `admin.users.*` | **super admin** |
+| GET `/connection-status` | `connection-status` | **no auth, no session** (bootstrap/app.php); polled by the connection card |
 
 Run `php artisan route:list --except-vendor` for the live list.
 

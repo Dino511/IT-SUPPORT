@@ -187,6 +187,7 @@
 </script>
 @include('partials.theme-toggle')
 @include('partials.full-text-tips')
+@include('partials.connection-status')
 @stack('scripts')
 </body>
 </html>
