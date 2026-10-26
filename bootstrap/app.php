@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ConnectionStatusController;
 use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +18,8 @@ return Application::configure(basePath: dirname(__DIR__))
         then: fn () => Route::get('/connection-status', ConnectionStatusController::class)->name('connection-status'),
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // browser security headers on every response; first, so error and maintenance pages get them too
+        $middleware->prepend(SecurityHeaders::class);
         // `role:super_admin,admin` route middleware (see app/Http/Middleware/EnsureRole.php)
         $middleware->alias(['role' => EnsureRole::class]);
         // unauthenticated visitors go to the sign-in page
