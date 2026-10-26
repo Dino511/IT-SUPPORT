@@ -99,7 +99,7 @@
         <div class="card h-100">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <strong><i class="bi bi-inbox me-1" aria-hidden="true"></i>Open requests</strong>
-                <a href="{{ route('admin.requests.index') }}" class="small fw-semibold">View all <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                <a href="{{ route('admin.requests.index') }}" class="small fw-semibold text-decoration-none">View all</a>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
