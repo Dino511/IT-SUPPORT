@@ -61,6 +61,8 @@ Demo logins (password `password`, change them before going live):
 
 - **Developer guide:** [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) covers setup, architecture, the data model, business rules, how-to recipes, SQL Server notes and deployment.
 - **User guide (slides):** `docs/IT-Inventory-User-Guide.pptx`, a step-by-step guide for Super Admin and Admin users.
+- **Backups:** `scripts/backup.ps1` backs up the database, PO files and settings; see "Backups" in the developer guide for scheduling and restoring.
+- **Office network:** `scripts/start-server.ps1` / `stop-server.ps1` run the app for other PCs on port 8000; see "Running on the office network" in the developer guide.
 
 ## Notes
 

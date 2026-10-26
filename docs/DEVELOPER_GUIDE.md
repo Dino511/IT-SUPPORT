@@ -311,16 +311,74 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 ## 11. Deployment checklist
 
 - `APP_ENV=production`, `APP_DEBUG=false`, set `APP_URL`. Serve over HTTPS.
+  - With debug off, users see the themed `errors/500` page (with the time it happened) instead of a stack trace. The details are in `storage/logs/laravel-YYYY-MM-DD.log` (`LOG_STACK=daily`, `LOG_LEVEL=warning`, kept `LOG_DAILY_DAYS=30`).
+  - In production, `php artisan migrate` and other data-changing commands ask for confirmation (`--force` skips it). `migrate:fresh` / `db:seed` would wipe or add demo data: never run them on the live database.
+  - `php artisan down` shows the themed `errors/503` maintenance page until `php artisan up`.
 - **Do not seed.** Create the first Super Admin with tinker, then change or remove the demo accounts:
   ```bash
   php artisan tinker --execute="App\Models\User::create(['name'=>'…','email'=>'…','password'=>'…','role'=>'super_admin']);"
   ```
 - `php artisan migrate --force`, then `php artisan config:cache route:cache view:cache`.
 - The web server user needs write access to `storage/` and `bootstrap/cache/`.
-- **Back up** the database **and** `storage/app/private` (PO files).
+- **Back up** the database **and** `storage/app/private` (PO files) with `scripts/backup.ps1` (below).
 - Sessions and cache use the database (`SESSION_DRIVER=database`, `CACHE_STORE=database`).
 - `APP_TIMEZONE` matches the office (default `Asia/Manila`).
 - No internet is needed at run time: CSS, JavaScript and fonts are all in `public/vendor`.
+
+### Running on the office network
+
+The app is served by PHP's built-in web server, started by a Windows scheduled task when the Windows user signs in. Other PCs open **`http://<PC name>:8000`** (the PC's IP also works, but DHCP can change it). `APP_URL` in `.env` holds the same address.
+
+| Piece | What it does |
+|---|---|
+| `scripts/start-server.ps1` | Runs `php -S 0.0.0.0:8000` from `public\` with Laravel's router. Logs start/stop to `storage\logs\server.log`. If an earlier copy of itself still holds the port, it replaces it (so starting the task again = restart). |
+| `scripts/stop-server.ps1` | Stops the task **and** its `php.exe` (stopping the task alone leaves PHP running). |
+| Task **IT Inventory server** | At sign-in of this user, runs `start-server.ps1` with no window and no time limit. |
+| Task **IT Inventory backup** | Daily 12:30 PM (or as soon as the PC is on after a missed run), runs `backup.ps1` with no window. |
+
+Both tasks run `conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "…\scripts\<script>.ps1"`. Don't use `powershell -WindowStyle Hidden` instead: on Windows 11 it still opens a Windows Terminal window, and closing that window kills the server. Don't run `php artisan serve` on this PC either; it takes port 8000 and the network server then can't start (see `storage\logs\server.log`).
+
+```powershell
+Start-ScheduledTask -TaskName 'IT Inventory server'                      # start / restart
+powershell -ExecutionPolicy Bypass -File scripts\stop-server.ps1          # stop
+Get-ScheduledTaskInfo -TaskName 'IT Inventory backup'                     # last backup run and result (0 = OK)
+```
+
+Things the PC itself needs (Windows settings, done by an administrator):
+- **Firewall:** the office network must be a *Private* network, and PHP allowed on Private networks only, so the app is not open on public Wi-Fi or VPNs:
+  ```powershell
+  Set-NetConnectionProfile -InterfaceAlias 'Wi-Fi' -NetworkCategory Private
+  Set-NetFirewallRule -DisplayName 'CLI' -Profile Private        # the existing php.exe rule, if there is one
+  # or, if there is no php.exe rule:
+  New-NetFirewallRule -DisplayName 'IT Inventory (port 8000)' -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
+  ```
+- **No sleep while plugged in**, and a closed lid should "Do nothing" when plugged in: the app is offline whenever the PC sleeps, is off, or the user signs out (locking the screen is fine).
+- Limits of this setup: one request at a time (fine for a small IT team), plain HTTP (passwords cross the office network unencrypted), and it needs the user signed in. For more users, HTTPS or running with nobody signed in, move to **IIS** with PHP (FastCGI + URL Rewrite); the app pool's Windows account then needs a SQL Server login, or switch to a SQL login in `.env`.
+
+### Backups
+
+SQL Server Express has no SQL Agent, so backups are a PowerShell script run by Windows Task Scheduler.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\backup.ps1                       # to C:\Backups\IT-Inventory
+powershell -ExecutionPolicy Bypass -File scripts\backup.ps1 -Destination "E:\IT-Inventory" -KeepDays 60
+```
+
+Each run makes a dated folder with `it_inventory.bak` (full backup, checked with `RESTORE VERIFYONLY`), `po-files.zip` (if any PO uploads exist) and `env.txt` (the `.env`, which holds `APP_KEY`), logs a line to `backup-log.txt`, and deletes dated folders older than `-KeepDays` (30). A failed run exits with code 1 and removes its partial folder.
+
+- SQL Server writes the `.bak` as its own service account, which can't write into user folders (Desktop, OneDrive) or network shares. The script therefore backs up into SQL Server's default backup folder and then moves the file, so any destination the Windows user can write to works. That user needs access to the database and to that folder (the user who installed SQL Server has both).
+- Keep a copy **off this PC** (OneDrive, NAS, USB drive): a backup on the same disk does not survive a disk failure or theft. Backups contain all records and `APP_KEY`, so store them privately.
+- **Schedule** (as the same Windows user, daily at a time the PC is on):
+  ```powershell
+  $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\itinventory\scripts\backup.ps1"'
+  Register-ScheduledTask -TaskName 'IT Inventory backup' -Action $action -Trigger (New-ScheduledTaskTrigger -Daily -At 12:30pm) -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable)
+  ```
+  `-StartWhenAvailable` runs a missed backup as soon as the PC is back on.
+- **Restore** (stop the app first; this replaces the live data):
+  ```powershell
+  sqlcmd -S "localhost\SQLEXPRESS" -E -Q "RESTORE DATABASE [it_inventory] FROM DISK = N'C:\Backups\IT-Inventory\<folder>\it_inventory.bak' WITH REPLACE"
+  ```
+  then unzip `po-files.zip` into `storage\app\private\po`. Test a restore now and then (restore into another name with `WITH MOVE …` and compare row counts) so you know the backups work.
 
 ---
 

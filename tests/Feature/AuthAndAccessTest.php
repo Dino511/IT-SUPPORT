@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\DeviceRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
+use RuntimeException;
 use Tests\TestCase;
 
 /** Sign-in, roles, and a smoke test that every page renders for both roles. */
@@ -87,6 +89,20 @@ class AuthAndAccessTest extends TestCase
     public function test_unknown_pages_show_the_themed_404(): void
     {
         $this->actingAs($this->admin())->get('/admin/does-not-exist')->assertNotFound()->assertSee('Not found');
+    }
+
+    public function test_with_debug_off_errors_show_the_themed_page_without_details(): void
+    {
+        config(['app.debug' => false, 'logging.default' => 'null']);
+        Route::middleware('web')->get('/_test/boom', fn () => throw new RuntimeException('SQLSTATE secret connection detail'));
+
+        $this->actingAs($this->admin())->get('/_test/boom')->assertStatus(500)
+            ->assertSee('Something went wrong')
+            ->assertDontSee('SQLSTATE secret connection detail')
+            ->assertDontSee('Stack Trace');
+
+        // maintenance mode (php artisan down) has its own page too
+        $this->assertStringContainsString('Under maintenance', view('errors.503')->render());
     }
 
     public function test_logout(): void
