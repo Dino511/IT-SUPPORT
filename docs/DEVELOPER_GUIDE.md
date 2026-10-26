@@ -304,13 +304,26 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 
 ## 12. Testing and quality
 
-- There is **no automated test suite yet**; features were verified manually in the browser. The highest-value tests to add first:
-  1. request workflow per type (approve/complete side effects)
-  2. the own-request guard
-  3. admins can't post values outside the master data
-  4. asset-tag generation
-  5. company scoping
-- Format PHP with Laravel Pint (`./vendor/bin/pint`).
+Feature tests live in `tests/Feature` (40 tests). They run on **SQL Server**, like production, because some bugs, such as integer IDs coming back as strings, only show up there.
+
+```bash
+# once: create the test database (it is wiped on every run)
+sqlcmd -S .\SQLEXPRESS -E -Q "CREATE DATABASE it_inventory_test"
+
+php artisan test                         # whole suite (~15 s)
+php artisan test --filter=RequestWorkflow   # one file
+```
+
+- `phpunit.xml` points the tests at `it_inventory_test`. As a safety guard, `tests/TestCase.php` refuses to run against any database whose name doesn't end in `_test`, because RefreshDatabase drops every table.
+- Every test starts from the demo seed (`$seed = true`). Helpers such as `$this->admin()`, `$this->device('LT-0001')` and `$this->employee('EMP-0002')` fetch the known records.
+- Coverage:
+  - sign-in and roles
+  - every page rendering for both roles
+  - asset tags, dropdown rules, assign / return / status rules and PO files
+  - every request type's approve and complete outcome, plus the own-request guard
+  - master data renames, deletes, companies, device types and user accounts
+  - company scoping and the audit log export
+- Before every commit run `php artisan test` and `./vendor/bin/pint --test` (code style).
 - When changing behaviour, check the audit log entry it writes. The audit log is the system's compliance record.
 
 ---
@@ -321,4 +334,4 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 - No bulk import (CSV) of devices or employees.
 - Admins are not restricted to particular companies. The company switcher is a view filter, not a permission.
 - No device photos or attachments other than the PO.
-- No automated tests (see §12).
+- No browser (JavaScript) tests. The feature tests cover the server side; the dropdown and form scripts were checked manually in Chrome.

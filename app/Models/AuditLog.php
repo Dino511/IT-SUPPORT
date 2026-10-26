@@ -60,11 +60,11 @@ class AuditLog extends Model
     /**
      * Write one audit entry, attributed to the signed-in user.
      *
-     * @param  string  $action       one of the ACTIONS keys, e.g. 'device.assigned'
+     * @param  string  $action  one of the ACTIONS keys, e.g. 'device.assigned'
      * @param  string  $description  full human-readable sentence (shown and exported as is)
-     * @param  array   $context      optional: 'device' => Device, 'employee' => Employee,
-     *                               'request' => DeviceRequest (linked so the entry shows up
-     *                               on their pages), 'changes' => [field => [old, new]]
+     * @param  array  $context  optional: 'device' => Device, 'employee' => Employee,
+     *                          'request' => DeviceRequest (linked so the entry shows up
+     *                          on their pages), 'changes' => [field => [old, new]]
      */
     public static function record(string $action, string $description, array $context = []): self
     {

@@ -23,9 +23,9 @@ class Lookups
      * models), unless it is one of $current (an unchanged value on edit, which
      * may have been deactivated since) or the user is the super admin.
      *
-     * @param  string             $category     a Lookup::CATEGORIES key
-     * @param  string|array|null  $current      value(s) the record already has
-     * @param  string|null        $parentValue  brand name, when validating a model
+     * @param  string  $category  a Lookup::CATEGORIES key
+     * @param  string|array|null  $current  value(s) the record already has
+     * @param  string|null  $parentValue  brand name, when validating a model
      */
     public static function rule(string $category, string|array|null $current = null, ?string $parentValue = null): Closure
     {

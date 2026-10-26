@@ -25,7 +25,7 @@ class Inventory
      * device "assigned". Assigning to someone outside the owning company is
      * allowed and recorded as a loan in the audit description.
      *
-     * @param  array  $data     optional 'assigned_at', 'condition', 'remarks'
+     * @param  array  $data  optional 'assigned_at', 'condition', 'remarks'
      * @param  DeviceRequest|null  $request  request being fulfilled, if any (linked in the log)
      *
      * @throws ValidationException when the device is not available
@@ -68,7 +68,7 @@ class Inventory
      * Status 'lost' is logged as "device.lost" rather than a return.
      *
      * @param  string  $newStatus  available | in_repair | damaged | lost | retired
-     * @param  array   $data       optional 'returned_at', 'condition' (also updates the device), 'remarks'
+     * @param  array  $data  optional 'returned_at', 'condition' (also updates the device), 'remarks'
      */
     public static function unassign(Device $device, string $newStatus = 'available', array $data = [], ?DeviceRequest $request = null): void
     {

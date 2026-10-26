@@ -25,6 +25,7 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
+
     public const ROLE_ADMIN = 'admin';
 
     /** Role code => label shown in the UI. */
