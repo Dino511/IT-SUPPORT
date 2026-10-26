@@ -313,14 +313,13 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 
 ## 11. Deployment checklist
 
+Installing on a new server PC, step by step (SQL Server, PHP, IIS or the built-in server, first login, backups, updates): **[DEPLOYMENT.md](DEPLOYMENT.md)**. A real installation seeds only `MasterDataSeeder` and creates its first login with `php artisan app:create-super-admin`; `DatabaseSeeder` (= master data + `DemoDataSeeder`) is for development and tests only.
+
 - `APP_ENV=production`, `APP_DEBUG=false`, set `APP_URL`. Serve over HTTPS.
   - With debug off, users see the themed `errors/500` page (with the time it happened) instead of a stack trace. The details are in `storage/logs/laravel-YYYY-MM-DD.log` (`LOG_STACK=daily`, `LOG_LEVEL=warning`, kept `LOG_DAILY_DAYS=30`).
   - In production, `php artisan migrate` and other data-changing commands ask for confirmation (`--force` skips it). `migrate:fresh` / `db:seed` would wipe or add demo data: never run them on the live database.
   - `php artisan down` shows the themed `errors/503` maintenance page until `php artisan up`.
-- **Do not seed.** Create the first Super Admin with tinker, then change or remove the demo accounts:
-  ```bash
-  php artisan tinker --execute="App\Models\User::create(['name'=>'…','email'=>'…','password'=>'…','role'=>'super_admin']);"
-  ```
+- **Seed master data only** (`php artisan db:seed --class=MasterDataSeeder --force`, never plain `db:seed`), then create the first Super Admin with `php artisan app:create-super-admin` (asks for the password with hidden typing). If demo data was loaded, change or remove the demo accounts.
 - `php artisan migrate --force`, then `php artisan config:cache route:cache view:cache`.
 - The web server user needs write access to `storage/` and `bootstrap/cache/`.
 - **Back up** the database **and** `storage/app/private` (PO files) with `scripts/backup.ps1` (below).
