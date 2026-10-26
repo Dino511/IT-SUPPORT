@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
+use App\Models\Device;
 use App\Models\DeviceRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -68,6 +70,33 @@ class RequestWorkflowTest extends TestCase
         $this->assertSame($r->id, $tablet->fresh()->activeAssignment->device_request_id);
     }
 
+    public function test_only_devices_of_the_requested_type_are_offered_and_accepted(): void
+    {
+        // in stock: GD-0001 (gadget), MN-0001 (monitor), TB-0001 (tablet)
+        $r = $this->file('new_device', 'EMP-0005', null, ['device_type' => 'tablet']);
+        $this->approve($r);
+
+        $this->get(route('admin.requests.show', $r))->assertOk()
+            ->assertSee('Showing available Tablet units only')
+            ->assertSee('TB-0001')
+            ->assertDontSee('GD-0001')
+            ->assertDontSee('MN-0001');
+
+        // a posted device of another type is refused, and stays in stock
+        $this->complete($r, ['device_id' => $this->device('GD-0001')->id])
+            ->assertSessionHasErrors(['device_id' => 'Choose a device of the requested type (Tablet).']);
+        $this->assertSame('available', $this->device('GD-0001')->status);
+        $this->assertSame('approved', $r->fresh()->status);
+
+        // no laptop in stock: the list is empty and links to logging one
+        $laptop = $this->file('new_device', 'EMP-0005', null, ['device_type' => 'laptop']);
+        $this->approve($laptop);
+        $this->get(route('admin.requests.show', $laptop))->assertOk()
+            ->assertSee('No available Laptop in stock.')
+            ->assertSee(route('admin.devices.create', ['type' => 'laptop']), false)
+            ->assertDontSee('TB-0001');
+    }
+
     public function test_lost_report_closes_the_assignment(): void
     {
         $r = $this->file('lost', 'EMP-0004', 'MB-0002', ['incident_date' => now()->subDay()->format('Y-m-d H:i')]);
@@ -88,7 +117,12 @@ class RequestWorkflowTest extends TestCase
         $this->approve($r);
         $this->assertSame('damaged', $this->device('MB-0001')->status);
 
-        $replacement = $this->device('GD-0001');
+        // the replacement must be the same type as the damaged phone
+        $this->complete($r, ['device_status' => 'damaged', 'device_id' => $this->device('GD-0001')->id])->assertSessionHasErrors('device_id');
+        $this->assertSame('approved', $r->fresh()->status);
+
+        $replacement = Device::create(['asset_tag' => 'MB-0099', 'type' => 'mobile', 'brand' => 'Samsung', 'model' => 'Galaxy A35',
+            'company_id' => $this->device('MB-0001')->company_id, 'status' => 'available', 'condition' => 'new']);
         $this->complete($r, ['device_status' => 'damaged', 'condition' => 'poor', 'device_id' => $replacement->id])->assertSessionHasNoErrors();
 
         $broken = $this->device('MB-0001');
@@ -118,7 +152,7 @@ class RequestWorkflowTest extends TestCase
         $this->actingAs($this->admin())->post(route('admin.requests.store'), [
             'employee_id' => $this->employee('EMP-0002')->id, 'request_type' => 'damaged',
             'device_id' => $this->device('LT-0001')->id, 'priority' => 'high', 'reason' => 'Again',
-        ])->assertSessionHasErrors('device_id');
+        ])->assertSessionHasErrors(['device_ids' => 'There is already an open request for LT-0001.']);
     }
 
     public function test_the_device_must_belong_to_the_employee(): void
@@ -127,7 +161,62 @@ class RequestWorkflowTest extends TestCase
             'employee_id' => $this->employee('EMP-0002')->id, 'request_type' => 'repair',
             'device_id' => $this->device('LT-0002')->id, // Maria's laptop
             'priority' => 'normal', 'reason' => 'Wrong device',
-        ])->assertSessionHasErrors('device_id');
+        ])->assertSessionHasErrors('device_ids.0');
+    }
+
+    public function test_several_devices_are_filed_as_one_request_each(): void
+    {
+        // Juan (EMP-0002) holds LT-0001 and MB-0001: the form lets you pick both
+        $this->actingAs($this->admin())->get(route('admin.requests.create', ['employee' => $this->employee('EMP-0002')->id]))
+            ->assertOk()->assertSee('name="device_ids[]" id="device_id" multiple', false);
+
+        $devices = [$this->device('LT-0001'), $this->device('MB-0001')];
+        $response = $this->post(route('admin.requests.store'), [
+            'employee_id' => $this->employee('EMP-0002')->id, 'request_type' => 'return',
+            'device_ids' => [$devices[0]->id, $devices[1]->id], 'priority' => 'normal', 'reason' => 'Resigned',
+        ])->assertSessionHasNoErrors()->assertRedirect(route('admin.requests.index'));
+
+        $filed = DeviceRequest::where('reason', 'Resigned')->orderBy('id')->get();
+        $this->assertSame([$devices[0]->id, $devices[1]->id], $filed->pluck('device_id')->all());
+        $this->assertSame(['pending', 'pending'], $filed->pluck('status')->all());
+        $this->assertNotSame($filed[0]->reference_no, $filed[1]->reference_no);
+        $response->assertSessionHas('success', '2 requests filed, one per device: '.$filed->pluck('reference_no')->implode(', ').'.');
+        $this->assertSame(2, AuditLog::where('action', 'request.created')->count());
+
+        // each one is then handled on its own
+        $this->approve($filed[0]);
+        $this->assertSame(['approved', 'pending'], $filed->map->fresh()->pluck('status')->all());
+    }
+
+    public function test_the_form_offers_common_reasons_for_every_type(): void
+    {
+        $this->assertSame(array_keys(DeviceRequest::TYPES), array_keys(DeviceRequest::REASON_SUGGESTIONS));
+
+        $this->actingAs($this->admin())->get(route('admin.requests.create'))->assertOk()
+            ->assertSee('id="reason-chips"', false)
+            ->assertSee(json_encode(DeviceRequest::REASON_SUGGESTIONS), false);
+
+        // a reason is still free text: anything typed is saved as is
+        $r = $this->file('return', 'EMP-0003', 'LT-0002', ['reason' => 'Resigned - last day 30 Oct, laptop bag included']);
+        $this->assertSame('Resigned - last day 30 Oct, laptop bag included', $r->reason);
+    }
+
+    public function test_a_multi_device_request_is_all_or_nothing(): void
+    {
+        $this->file('repair', 'EMP-0002', 'LT-0001');
+        $post = fn (array $ids) => $this->actingAs($this->admin())->post(route('admin.requests.store'), [
+            'employee_id' => $this->employee('EMP-0002')->id, 'request_type' => 'damaged',
+            'device_ids' => $ids, 'priority' => 'normal', 'reason' => 'Dropped the bag',
+        ]);
+
+        // LT-0001 already has an open request, so MB-0001 is not filed either
+        $post([$this->device('MB-0001')->id, $this->device('LT-0001')->id])
+            ->assertSessionHasErrors(['device_ids' => 'There is already an open request for LT-0001.']);
+        // LT-0002 is Maria's laptop, not Juan's
+        $post([$this->device('MB-0001')->id, $this->device('LT-0002')->id])->assertSessionHasErrors('device_ids.1');
+        $post([])->assertSessionHasErrors('device_ids');
+
+        $this->assertSame(0, DeviceRequest::where('reason', 'Dropped the bag')->count());
     }
 
     public function test_reject_needs_a_reason(): void

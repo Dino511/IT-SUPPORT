@@ -39,12 +39,17 @@
                     </select>
                 </div>
 
+                {{-- several devices can be picked when the employee holds more than one;
+                     each one becomes its own request (see RequestController::store) --}}
                 <div class="col-md-6" data-for="repair damaged lost return">
-                    <label class="form-label" for="device_id">Device *</label>
-                    <select name="device_id" id="device_id" data-combo data-placeholder="Select the employee's device...">
-                        <option value=""></option>
+                    <div class="d-flex justify-content-between align-items-baseline">
+                        <label class="form-label" for="device_id">Device *</label>
+                        <button type="button" class="btn btn-link btn-sm p-0 small" id="all-devices" hidden>Select all</button>
+                    </div>
+                    <select name="device_ids[]" id="device_id" multiple data-combo data-placeholder="Select the employee's device...">
                     </select>
                     <div class="form-text" id="no-devices" hidden>This employee has no assigned devices.</div>
+                    <div class="form-text" id="multi-hint" hidden>You can pick more than one. Each device is filed as its own request.</div>
                 </div>
 
                 <div class="col-md-3">
@@ -61,6 +66,9 @@
 
                 <div class="col-12">
                     <label class="form-label" for="reason">Reason / details *</label>
+                    {{-- one-click common reasons for the chosen type (DeviceRequest::REASON_SUGGESTIONS);
+                         they only fill in the text box, which can still be typed in freely --}}
+                    <div class="reason-chips mb-2" id="reason-chips" role="group" aria-label="Common reasons"></div>
                     <textarea name="reason" id="reason" rows="5" class="form-control" required>{{ old('reason') }}</textarea>
                 </div>
             </div>
@@ -96,7 +104,8 @@
 <script>
     const DEVICES = @json($devicesByEmployee);
     const EMPLOYEES = @json($employeeInfo);
-    const SELECTED_DEVICE = @json((string) $sel('device_id'));
+    // devices to pre-select: from ?device= on a link, or the previous submit after a validation error
+    const SELECTED_DEVICES = @json(collect(old('device_ids', array_filter([$selected['device_id'] ?? null])))->map(fn ($id) => (string) $id)->values());
     const employeeTs = document.getElementById('employee_id').tomselect;
     const deviceTs = document.getElementById('device_id').tomselect;
     const hints = {
@@ -106,6 +115,9 @@
         lost: 'Where and how was it lost? Was it reported to security / police?',
         return: 'Why is it being returned? (e.g. resignation, upgrade)',
     };
+    const REASONS = @json(\App\Models\DeviceRequest::REASON_SUGGESTIONS);
+    const reasonBox = document.getElementById('reason');
+    const SEP = ' - ';
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
     function renderSnapshot() {
@@ -131,18 +143,66 @@
                 : '<div class="small text-muted">No devices assigned.</div>'}`;
     }
 
+    // Fills the device box with the employee's devices. With one device it is
+    // simply selected; with more, several can be picked (and "Select all" shows).
     function loadDevices(keep) {
         const list = DEVICES[employeeTs.getValue()] || [];
         deviceTs.clear(); deviceTs.clearOptions();
         list.forEach(d => deviceTs.addOption({ value: String(d.id), text: d.label }));
-        if (keep && SELECTED_DEVICE) deviceTs.setValue(SELECTED_DEVICE, true);
+        deviceTs.settings.maxItems = list.length > 1 ? null : 1;
+        if (keep && SELECTED_DEVICES.length) deviceTs.setValue(SELECTED_DEVICES, true);
         else if (list.length === 1) deviceTs.setValue(String(list[0].id), true);
         document.getElementById('no-devices').hidden = !employeeTs.getValue() || list.length > 0;
+        document.getElementById('multi-hint').hidden = list.length < 2;
+        document.getElementById('all-devices').hidden = list.length < 2;
         renderSnapshot();
     }
 
+    document.getElementById('all-devices').addEventListener('click', () => {
+        deviceTs.setValue((DEVICES[employeeTs.getValue()] || []).map(d => String(d.id)));
+        deviceTs.close();
+    });
+
+    /*
+     * Common-reason chips. Clicking one puts it at the start of the reason
+     * ("Resigned - ") ready for details; clicking another swaps it, clicking
+     * the same one again takes it out. Typed text is never removed.
+     */
+    const currentType = () => document.querySelector('[name=request_type]:checked')?.value;
+    // longest first, and across all types, so a chip picked before switching type is swapped too
+    const ALL_REASONS = [...new Set(Object.values(REASONS).flat())].sort((a, b) => b.length - a.length);
+    function reasonPrefix() {
+        const text = reasonBox.value;
+        return ALL_REASONS.find(r => text === r || text.startsWith(r + SEP)) || null;
+    }
+    function markChips() {
+        const prefix = reasonPrefix();
+        document.querySelectorAll('.reason-chip').forEach(c => {
+            c.classList.toggle('active', c.dataset.reason === prefix);
+            c.setAttribute('aria-pressed', c.dataset.reason === prefix);
+        });
+    }
+    function renderReasonChips() {
+        document.getElementById('reason-chips').innerHTML = (REASONS[currentType()] || [])
+            .map(r => `<button type="button" class="reason-chip" data-reason="${esc(r)}" aria-pressed="false">${esc(r)}</button>`).join('');
+        markChips();
+    }
+    document.getElementById('reason-chips').addEventListener('click', e => {
+        const chip = e.target.closest('.reason-chip');
+        if (!chip) return;
+        const pick = chip.dataset.reason, prefix = reasonPrefix();
+        const rest = (prefix ? reasonBox.value.slice(prefix.length) : reasonBox.value).replace(/^\s*-\s*/, '').trim();
+        reasonBox.value = prefix === pick ? rest : `${pick}${SEP}${rest}`;
+        reasonBox.focus();
+        reasonBox.setSelectionRange(reasonBox.value.length, reasonBox.value.length);
+        markChips();
+    });
+    reasonBox.addEventListener('input', markChips);
+    // a chip with nothing typed after it is saved as just "Resigned", not "Resigned -"
+    reasonBox.form.addEventListener('submit', () => { reasonBox.value = reasonBox.value.replace(/\s+-\s*$/, ''); });
+
     function sync() {
-        const type = document.querySelector('[name=request_type]:checked')?.value;
+        const type = currentType();
         document.querySelectorAll('[data-for]').forEach(el => {
             const show = el.dataset.for.split(' ').includes(type);
             el.classList.toggle('d-none', !show);
@@ -150,6 +210,7 @@
             el.querySelectorAll('select').forEach(s => s.tomselect ? (show ? s.tomselect.enable() : s.tomselect.disable()) : s.disabled = !show);
         });
         document.querySelector('[name=reason]').placeholder = hints[type] || '';
+        renderReasonChips();
     }
 
     employeeTs.on('change', () => loadDevices(false));

@@ -104,9 +104,12 @@
                     @endif
 
                     @if($type !== 'return')
+                        {{-- only units of the requested type are offered (filtered in RequestController::show) --}}
+                        @php($typeName = $wantedType ? (\App\Models\DeviceType::names()[$wantedType] ?? $wantedType) : null)
                         <label class="form-label">{{ $type === 'new_device' ? 'Device to assign *' : 'Replacement device (optional)' }}</label>
+                        @if($typeName)<div class="form-text mt-0 mb-2"><i class="bi bi-funnel me-1"></i>Showing available {{ $typeName }} units only</div>@endif
                         <select name="device_id" class="form-select mb-3" @required($type === 'new_device')>
-                            <option value="">{{ $type === 'new_device' ? 'Select an available device...' : 'No replacement' }}</option>
+                            <option value="">{{ $type === 'new_device' ? 'Select an available '.($typeName ?? 'device').'...' : 'No replacement' }}</option>
                             @foreach($availableDevices->groupBy('type') as $t => $group)
                                 <optgroup label="{{ \App\Models\DeviceType::names()[$t] ?? $t }}">
                                     @foreach($group as $d)
@@ -115,7 +118,12 @@
                                 </optgroup>
                             @endforeach
                         </select>
-                        @if($availableDevices->isEmpty())<div class="alert alert-warning small py-2">No available devices in stock.</div>@endif
+                        @if($availableDevices->isEmpty())
+                            <div class="alert alert-warning small py-2">
+                                No available {{ $typeName ?? 'devices' }} in stock.
+                                <a href="{{ route('admin.devices.create', $wantedType ? ['type' => $wantedType] : []) }}" class="alert-link">Log a {{ $typeName ?? 'device' }}</a>, then come back to complete this request.
+                            </div>
+                        @endif
                     @endif
 
                     <textarea name="admin_remarks" class="form-control mb-2" rows="2" placeholder="Remarks (optional)"></textarea>

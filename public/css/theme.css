@@ -403,6 +403,25 @@ td.fw-semibold, td.mono { white-space: nowrap; }
 .ts-dropdown .active { background: var(--pill-primary-bg) !important; color: var(--text) !important; }
 .ts-dropdown .create { color: var(--link); }
 .ts-wrapper .clear-button { color: var(--muted); }
+/* New Request: one-click common reasons above the "Reason / details" box */
+.reason-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.reason-chips:empty { display: none; }
+.reason-chip {
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: .2rem .7rem; font-size: .8rem; line-height: 1.4;
+}
+.reason-chip:hover { border-color: var(--link); color: var(--link); }
+.reason-chip.active { background: var(--pill-primary-bg); border-color: var(--link); color: var(--pill-primary); font-weight: 600; }
+.reason-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* multi-pick (e.g. several devices on a request): one chip per choice */
+.ts-wrapper.multi .ts-control { padding: .35rem .5rem; gap: .3rem; }
+.ts-wrapper.multi .ts-control > .item {
+    background: var(--pill-primary-bg) !important; color: var(--text) !important; border: 1px solid var(--line-strong) !important;
+    border-radius: 6px; margin: 0 !important; padding: .15rem .25rem .15rem .55rem !important; font-size: .875rem; line-height: 1.4; white-space: normal;
+}
+.ts-wrapper.multi .ts-control > .item .remove { border-left: 0 !important; color: var(--muted); margin-left: .25rem; padding: 0 .35rem; border-radius: 4px; }
+.ts-wrapper.multi .ts-control > .item .remove:hover { background: var(--surface-alt); color: var(--rose-strong); }
 
 /* Master Data: fixed-width menu on wide screens so the tables get the rest */
 @media (min-width: 1400px) { .master-nav { width: 270px; } }

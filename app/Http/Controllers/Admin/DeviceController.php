@@ -54,7 +54,8 @@ class DeviceController extends Controller
     /** "Log New Device" form; the company defaults to the one being viewed. */
     public function create()
     {
-        return $this->form(new Device(['status' => 'available', 'condition' => 'new', 'company_id' => CompanyScope::id()]));
+        // ?type=laptop pre-selects the type (used by "Log a device" on a request with no stock)
+        return $this->form(new Device(['status' => 'available', 'condition' => 'new', 'company_id' => CompanyScope::id(), 'type' => request()->query('type')]));
     }
 
     /**

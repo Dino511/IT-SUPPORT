@@ -37,6 +37,21 @@ class DeviceTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['action' => 'device.created']);
     }
 
+    public function test_serial_numbers_are_optional_but_unique(): void
+    {
+        $this->actingAs($this->admin());
+
+        // several devices can be logged without a serial number (SQL Server
+        // used to treat the second NULL as a duplicate)
+        $this->post(route('admin.devices.store'), $this->newLaptop())->assertSessionHasNoErrors();
+        $this->post(route('admin.devices.store'), $this->newLaptop(['serial_number' => '']))->assertSessionHasNoErrors();
+        $this->assertSame(['LT-0004', 'LT-0005'], Device::whereNull('serial_number')->orderBy('asset_tag')->pluck('asset_tag')->all());
+
+        // a serial number already in use is still refused
+        $this->post(route('admin.devices.store'), $this->newLaptop(['serial_number' => 'DL5440-8H2K1']))->assertSessionHasErrors('serial_number');
+        $this->assertSame(1, Device::where('serial_number', 'DL5440-8H2K1')->count());
+    }
+
     public function test_changing_the_type_re_tags_the_device(): void
     {
         $this->actingAs($this->superAdmin());

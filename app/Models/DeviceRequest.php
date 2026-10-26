@@ -44,6 +44,22 @@ class DeviceRequest extends Model
     /** Allowed values of `priority` => label (also used to sort the queue). */
     public const PRIORITIES = ['low' => 'Low', 'normal' => 'Normal', 'high' => 'High'];
 
+    /**
+     * Common reasons per request type, shown as one-click chips above the
+     * "Reason / details" box on the New Request form. Clicking one only fills
+     * in text: the reason stays free text, so add or edit entries here freely.
+     */
+    public const REASON_SUGGESTIONS = [
+        'new_device' => ['New Employee', 'Intern / OJT', 'Reassignment', 'Replacement - current unit too old or slow',
+            'Upgrade for role', 'Additional device', 'Temporary / project use', 'Transfer from another company'],
+        'repair' => ['Will not power on', 'Battery or charging issue', 'Screen or display problem', 'Keyboard / trackpad not working',
+            'Slow performance', 'Software / OS issue', 'Overheating', 'Network / Wi-Fi issue'],
+        'damaged' => ['Dropped', 'Liquid spill', 'Cracked screen', 'Damaged in transit', 'Power surge', 'Wear and tear'],
+        'lost' => ['Stolen', 'Misplaced in the office', 'Lost while travelling', 'Lost in transit / courier'],
+        'return' => ['Resigned', 'End of contract', 'End of internship', 'Reassignment', 'Upgrade / replaced',
+            'No longer needed', 'Extended leave', 'Transfer to another company'],
+    ];
+
     protected $fillable = [
         'reference_no', 'employee_id', 'requested_by', 'request_type', 'device_type',
         'device_id', 'priority', 'reason', 'incident_date', 'status', 'handled_by',

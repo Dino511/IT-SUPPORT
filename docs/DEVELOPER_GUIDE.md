@@ -32,9 +32,9 @@ There are two roles, both IT staff. Employees do not log in.
 |---|---|
 | Language / framework | PHP 8.2+ (developed on 8.5), **Laravel 13** |
 | Database | **Microsoft SQL Server** (Express is fine) via `pdo_sqlsrv` |
-| UI | Server-rendered **Blade**, **Bootstrap 5.3** + Bootstrap Icons, **Tom Select** (searchable dropdowns). All loaded from CDNs, so there is no npm build |
+| UI | Server-rendered **Blade**, **Bootstrap 5.3** + Bootstrap Icons, **Tom Select** (searchable dropdowns). Local copies in `public/vendor`: no CDN, no npm build, and the app works without internet |
 | Styling | `public/css/theme.css` (design tokens, light and dark themes) |
-| Fonts | Plus Jakarta Sans, JetBrains Mono (Google Fonts) |
+| Fonts | Plus Jakarta Sans, JetBrains Mono, self-hosted in `public/vendor/fonts` (SIL Open Font License) |
 | Auth | Laravel session guard; `users` table; custom `role` middleware |
 | Files | PO documents on Laravel's private `local` disk (`storage/app/private/po`) |
 
@@ -68,6 +68,8 @@ DB_DATABASE=it_inventory
 DB_USERNAME=                     # empty = Windows authentication
 DB_PASSWORD=
 ```
+
+`APP_TIMEZONE=Asia/Manila` (the default) is the zone timestamps are saved and shown in. Set it before real records go in: changing it later shifts how earlier times are displayed.
 
 **Demo logins** (seeded, password `password`): `superadmin@company.test` (Super Admin), `admin@company.test` (Admin).
 
@@ -103,9 +105,10 @@ database/
   migrations/2026_10_23_000002_*    companies table + PO file columns (with data conversion)
   seeders/DatabaseSeeder.php        demo data
 public/css/theme.css                the whole visual design
+public/vendor/                      Bootstrap, Bootstrap Icons, Tom Select and the fonts (local copies, see §7)
 resources/views/
   layouts/app.blade.php             shell: sidebar, page header, alerts, Tom Select init
-  partials/                         theme-head, theme-toggle, logs (activity table)
+  partials/                         theme-head, theme-toggle, full-text-tips, logs (activity table)
   components/                       <x-status> pill, <x-combo> master-data dropdown
   admin/…                           one folder per area
   auth/login.blade.php, errors/…    sign-in and themed 403/404/419 pages
@@ -212,6 +215,10 @@ pending ──approve──▶ approved ──complete──▶ completed
 
 Only **one open request per device** is allowed. Requests are always filed **by an admin for an employee** (`requested_by` = admin, `employee_id` = employee).
 
+**Several devices at once:** when the employee holds more than one device, the New Request form lets the admin pick several (`device_ids[]`, with a *Select all* link), e.g. returning everything when someone resigns. `store()` files **one request per device**, all or nothing, because each device is approved and completed on its own. A single `device_id` is still accepted (links from device pages use `?device=`).
+
+**Same type only:** the device handed out on completion must match the request: the requested type for `new_device`, or the reported device's type for a replacement (a damaged laptop is replaced by a laptop). `RequestController::wantedType()` decides it; `show()` lists only available units of that type (employee's company first) and `complete()` rejects any other. With none in stock, the page links to *Log Device* with the type pre-selected (`/admin/devices/create?type=laptop`).
+
 ### 6.6 Multiple companies (`App\Support\CompanyScope`)
 The sidebar switcher stores `company_scope` in the session. Lists, the dashboard and the audit log call `CompanyScope::apply()` (for tables with `company_id`) or `applyVia($query, 'employee')` (through a relation). Detail pages and forms are not restricted, so loans across companies remain possible.
 
@@ -230,6 +237,16 @@ Uploaded in the device form (`po_file`: pdf, jpg, png, doc(x), xls(x), max 10 MB
 
 - **Layout:** `resources/views/layouts/app.blade.php`. Pages set `@section('title')`, optional `@section('actions')` (header buttons) and `@section('content')`. The eyebrow text above the title comes from the route name, or from `@section('eyebrow')`.
 - **Theme:** `public/css/theme.css`. Colours are CSS variables at the top (`:root` for light, `[data-bs-theme="dark"]` for dark), and Bootstrap classes are restyled from them. Change colours there, never inline in views. The light/dark choice follows the OS, can be toggled in the sidebar, and is remembered in `localStorage`.
+- **Third-party files (no CDN):** everything the browser loads is served from `public/vendor`, so pages work on a PC or office network with no internet.
+
+  | Folder | Package | Loaded in |
+  |---|---|---|
+  | `vendor/bootstrap` | Bootstrap 5.3.3 (CSS + `bootstrap.bundle.min.js`, which includes Popper) | `partials/theme-head`, `layouts/app` |
+  | `vendor/bootstrap-icons` | Bootstrap Icons 1.11.3 (CSS + `fonts/` woff2/woff) | `partials/theme-head` |
+  | `vendor/tom-select` | Tom Select 2.3.1 (`tom-select.bootstrap5` CSS + `tom-select.complete` JS) | `layouts/app` |
+  | `vendor/fonts` | Plus Jakarta Sans (variable, 200–800) and JetBrains Mono 500/700 from Fontsource 5.3.0; Latin, Latin Extended and Vietnamese subsets; `@font-face` rules in `fonts.css` | `partials/theme-head` |
+
+  To upgrade one, download the same files for the new version from npm (or `cdn.jsdelivr.net/npm/<package>@<version>/…`), replace them in the folder, keep its `LICENSE`, and update the version in this table. The `.map` files only help browser dev tools.
 - **Components:** `<x-status :value="$device->status" />` renders a status pill. `<x-combo name="brand" :options="$list" :value="$current" required />` renders a master-data dropdown.
 - **Dynamic forms:** the device form shows spec fields according to the device type, and filters models by the selected brand. The request form fills the device list and the employee snapshot from JSON passed by the controller. The scripts are inline at the bottom of each view (`@push('scripts')`).
 
@@ -268,7 +285,10 @@ Run `php artisan route:list --except-vendor` for the live list.
 Add the code and label to `AuditLog::ACTIONS`, call `AuditLog::record()` where it happens, and adjust `getActionStyleAttribute()` if it needs its own colour.
 
 **Add a request type**
-Add it to `DeviceRequest::TYPES`, the type buttons and `data-for` blocks in `admin/requests/form.blade.php`, the `match` in `RequestController::approve()`, the branches in `complete()`, and the completion form in `admin/requests/show.blade.php`.
+Add it to `DeviceRequest::TYPES` and `DeviceRequest::REASON_SUGGESTIONS`, the type buttons and `data-for` blocks in `admin/requests/form.blade.php`, the `match` in `RequestController::approve()`, the branches in `complete()`, and the completion form in `admin/requests/show.blade.php`.
+
+**Add or change a common reason** (the one-click chips above *Reason / details* on New Request)
+Edit the list for that request type in `DeviceRequest::REASON_SUGGESTIONS`. Chips only fill in the text box ("Resigned - " followed by whatever is typed), so the reason stays free text and old requests are unaffected.
 
 **Add a page**
 Controller method → route inside the right role group → view extending `layouts.app` → sidebar entry in the `$nav` / `$superNav` arrays at the top of the layout.
@@ -283,7 +303,7 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 - **Integer columns come back as strings** from `pdo_sqlsrv`. Models cast foreign keys to `integer`. Keep doing this for new FK columns, otherwise strict `===` comparisons fail silently (this was a real bug early on).
 - **No multiple cascade paths:** all foreign keys use the default NO ACTION. Delete or deactivate in code instead.
 - The default collation is **case-insensitive**: `'dell' = 'Dell'`. `Lookups::find()` relies on this.
-- A unique index treats NULL as a value. `lookups (category, parent_id, value)` therefore allows one parent-less option per text, which is what we want.
+- A unique index treats NULL as a value. `lookups (category, parent_id, value)` therefore allows one parent-less option per text, which is what we want. For an **optional unique column** it is not: a plain `->nullable()->unique()` lets only one row be empty. Use a filtered index instead, as `devices.serial_number` does (migration `2026_10_26_000001`): `CREATE UNIQUE INDEX … WHERE serial_number IS NOT NULL`.
 - `.env` `DB_HOST` with a backslash must be in **single quotes**.
 
 ---
@@ -299,6 +319,8 @@ Edit the tokens at the top of `public/css/theme.css`. The stylesheet URL is vers
 - The web server user needs write access to `storage/` and `bootstrap/cache/`.
 - **Back up** the database **and** `storage/app/private` (PO files).
 - Sessions and cache use the database (`SESSION_DRIVER=database`, `CACHE_STORE=database`).
+- `APP_TIMEZONE` matches the office (default `Asia/Manila`).
+- No internet is needed at run time: CSS, JavaScript and fonts are all in `public/vendor`.
 
 ---
 

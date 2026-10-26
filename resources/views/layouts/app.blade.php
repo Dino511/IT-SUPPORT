@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') · {{ config('app.name') }}</title>
     @include('partials.theme-head')
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <link href="{{ asset('vendor/tom-select/tom-select.bootstrap5.min.css') }}" rel="stylesheet">
     @stack('styles')
 </head>
 <body>
@@ -154,8 +154,9 @@
     </main>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+{{-- Local copies in public/vendor (Bootstrap 5.3.3, Tom Select 2.3.1), no CDN --}}
+<script src="{{ asset('vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ asset('vendor/tom-select/tom-select.complete.min.js') }}"></script>
 <script>
     /*
      * Searchable dropdowns. <select data-combo> lets the user type to filter the
@@ -172,7 +173,9 @@
             persist: false,
             maxOptions: 1000,
             allowEmptyOption: false,
-            plugins: el.required ? [] : ['clear_button'],
+            // <select multiple> shows chips with an x to remove each one
+            plugins: el.multiple ? ['remove_button'] : (el.required ? [] : ['clear_button']),
+            hidePlaceholder: el.multiple,
             placeholder: el.dataset.placeholder || (canCreate ? 'Search or add...' : 'Search...'),
             render: {
                 option_create: (data, escape) => `<div class="create">+ Add <strong>${escape(data.input)}</strong> to master data</div>`,

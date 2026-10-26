@@ -88,36 +88,44 @@ class RequestController extends Controller
 
     /**
      * File a request (status "pending"). A new_device request needs a device
-     * type; every other type needs a device the employee currently holds, and
-     * only one open request per device is allowed.
+     * type; every other type needs one or more devices the employee currently
+     * holds (device_ids[], or a single device_id). Each device becomes its own
+     * request, since each gets its own approval and outcome, and only one open
+     * request per device is allowed.
      */
     public function store(Request $request)
     {
+        if (! $request->has('device_ids') && $request->filled('device_id')) {
+            $request->merge(['device_ids' => [$request->input('device_id')]]);
+        }
+
         $data = $request->validate([
             'employee_id' => ['required', Rule::exists('employees', 'id')->where('is_active', true)],
             'request_type' => ['required', Rule::in(array_keys(DeviceRequest::TYPES))],
             'device_type' => ['nullable', 'required_if:request_type,new_device', Rule::exists('device_types', 'code')->where('is_active', true)],
-            'device_id' => ['nullable', 'required_unless:request_type,new_device',
-                Rule::exists('devices', 'id')->where('current_employee_id', $request->integer('employee_id'))],
+            'device_ids' => ['nullable', 'required_unless:request_type,new_device', 'array'],
+            'device_ids.*' => ['integer', 'distinct', Rule::exists('devices', 'id')->where('current_employee_id', $request->integer('employee_id'))],
             'priority' => ['required', Rule::in(array_keys(DeviceRequest::PRIORITIES))],
             'reason' => ['required', 'string', 'max:2000'],
             'incident_date' => ['nullable', 'date', 'before_or_equal:now'],
         ], [
-            'device_id.required_unless' => 'Select the device this request is about.',
-            'device_id.exists' => 'The selected device is not assigned to this employee.',
+            'device_ids.required_unless' => 'Select the device this request is about.',
+            'device_ids.*.exists' => 'A selected device is not assigned to this employee.',
         ]);
+        $deviceIds = $data['request_type'] === 'new_device' ? [null] : array_map('intval', $data['device_ids']);
+        unset($data['device_ids']);
 
-        if ($data['request_type'] === 'new_device') {
-            $data['device_id'] = null;
-        } else {
+        if ($data['request_type'] !== 'new_device') {
             $data['device_type'] = null;
-            if (DeviceRequest::where('device_id', $data['device_id'])->whereIn('status', ['pending', 'approved'])->exists()) {
-                return back()->withInput()->withErrors(['device_id' => 'There is already an open request for this device.']);
+            $busy = Device::whereIn('id', $deviceIds)
+                ->whereHas('requests', fn ($q) => $q->whereIn('status', ['pending', 'approved']))->pluck('asset_tag');
+            if ($busy->isNotEmpty()) {
+                return back()->withInput()->withErrors(['device_ids' => 'There is already an open request for '.$busy->implode(', ').'.']);
             }
         }
 
-        $deviceRequest = DB::transaction(function () use ($data) {
-            $deviceRequest = DeviceRequest::create($data + ['requested_by' => auth()->id(), 'status' => 'pending']);
+        $filed = DB::transaction(fn () => collect($deviceIds)->map(function ($deviceId) use ($data) {
+            $deviceRequest = DeviceRequest::create(['device_id' => $deviceId] + $data + ['requested_by' => auth()->id(), 'status' => 'pending']);
             $employee = $deviceRequest->employee;
 
             AuditLog::record('request.created',
@@ -126,9 +134,14 @@ class RequestController extends Controller
                 ['employee' => $employee, 'device' => $deviceRequest->device, 'request' => $deviceRequest]);
 
             return $deviceRequest;
-        });
+        }));
 
-        return redirect()->route('admin.requests.show', $deviceRequest)->with('success', "Request {$deviceRequest->reference_no} filed.");
+        if ($filed->count() === 1) {
+            return redirect()->route('admin.requests.show', $filed->first())->with('success', "Request {$filed->first()->reference_no} filed.");
+        }
+
+        return redirect()->route('admin.requests.index')
+            ->with('success', "{$filed->count()} requests filed, one per device: ".$filed->pluck('reference_no')->implode(', ').'.');
     }
 
     /** Cancel a pending request (any admin may cancel). Logged. */
@@ -147,19 +160,21 @@ class RequestController extends Controller
 
     /**
      * Request page with the actions allowed in its current status. The list of
-     * available devices (for new device / replacement) puts the requested type
-     * and the employee's own company first.
+     * available devices (for new device / replacement) only holds units of the
+     * type the request is about, with the employee's own company first.
      */
     public function show(DeviceRequest $deviceRequest)
     {
         $deviceRequest->load('employee.company', 'device.currentEmployee', 'device.company', 'requester', 'handler', 'logs.user');
+        $wantedType = $this->wantedType($deviceRequest);
 
         return view('admin.requests.show', [
             'req' => $deviceRequest,
             'isOwnRequest' => $this->isOwnRequest($deviceRequest),
-            // matching type first, then units owned by the employee's company
+            'wantedType' => $wantedType,
+            // units owned by the employee's company first
             'availableDevices' => Device::with('company')->where('status', 'available')
-                ->orderByRaw('CASE WHEN type = ? THEN 0 ELSE 1 END', [$deviceRequest->device_type ?? $deviceRequest->device?->type ?? ''])
+                ->when($wantedType, fn ($query, $type) => $query->where('type', $type))
                 ->orderByRaw('CASE WHEN company_id = ? THEN 0 ELSE 1 END', [$deviceRequest->employee->company_id ?? 0])
                 ->orderBy('type')->orderBy('asset_tag')->get(),
         ]);
@@ -214,15 +229,22 @@ class RequestController extends Controller
      *   repair / damaged / lost -> device_status decides: "assigned" (fixed, back to the
      *                             employee), available, damaged, lost or retired;
      *                             optionally assign a replacement device (device_id)
+     * The device handed out must be of the requested type (see wantedType()).
      */
     public function complete(Request $request, DeviceRequest $deviceRequest)
     {
         $this->ensureStatus($deviceRequest, ['approved']);
         $this->ensureNotOwnRequest($deviceRequest);
         $type = $deviceRequest->request_type;
+        $wantedType = $this->wantedType($deviceRequest);
 
         $data = $request->validate([
-            'device_id' => [$type === 'new_device' ? 'required' : 'nullable', Rule::exists('devices', 'id')->where('status', 'available')],
+            'device_id' => ['bail', $type === 'new_device' ? 'required' : 'nullable', Rule::exists('devices', 'id')->where('status', 'available'),
+                function ($attribute, $value, $fail) use ($wantedType) {
+                    if ($wantedType && Device::whereKey($value)->value('type') !== $wantedType) {
+                        $fail('Choose a device of the requested type ('.(DeviceType::names()[$wantedType] ?? $wantedType).').');
+                    }
+                }],
             'device_status' => [in_array($type, ['repair', 'damaged', 'lost']) ? 'required' : 'nullable',
                 Rule::in(['assigned', 'available', 'damaged', 'lost', 'retired'])],
             'condition' => ['nullable', Rule::in(array_keys(Device::CONDITIONS))],
@@ -265,6 +287,16 @@ class RequestController extends Controller
         });
 
         return back()->with('success', "{$deviceRequest->reference_no} completed.");
+    }
+
+    /**
+     * The device type a request may be given: the type asked for on a new_device
+     * request, or the reported device's type for a replacement (a broken laptop
+     * is replaced by a laptop). Null when unknown, which allows any type.
+     */
+    private function wantedType(DeviceRequest $deviceRequest): ?string
+    {
+        return $deviceRequest->device_type ?? $deviceRequest->device?->type;
     }
 
     /** Guard: the action is only valid in the given statuses (e.g. approve needs "pending"). */
