@@ -11,7 +11,7 @@
                 <td>
                     <span class="who mb-1">
                         <span class="avatar-xs {{ $log->user ? '' : 'system' }}" aria-hidden="true">{{ $log->user ? Str::of($log->user->name)->explode(' ')->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') : 'SY' }}</span>
-                        {{ $log->user?->name ?? 'System' }}
+                        {{ $log->actor_name }}
                     </span>
                     <span class="action-pill text-bg-{{ $tone }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $log->action_label }}</span>
                 </td>

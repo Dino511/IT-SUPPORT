@@ -88,7 +88,10 @@ class EmployeeController extends Controller
         return $this->form($employee);
     }
 
-    /** Save edits; changed fields are recorded old -> new in the audit log. */
+    /**
+     * Save edits; changed fields are recorded old -> new in the audit log.
+     * Activating / deactivating gets its own entry so it is easy to find.
+     */
     public function update(Request $request, Employee $employee)
     {
         $data = $this->validated($request, $employee);
@@ -102,11 +105,17 @@ class EmployeeController extends Controller
                 $changes['company'] = array_map(fn ($id) => $names[$id] ?? null, $changes['company_id']);
                 unset($changes['company_id']);
             }
+            $statusChange = $changes['is_active'] ?? null;
+            unset($changes['is_active']);
             $employee->save();
 
             if ($changes) {
-                AuditLog::record('employee.updated', "Updated employee {$employee->full_name}: ".implode(', ', array_keys($changes)),
+                AuditLog::record('employee.updated', "Updated employee {$employee->full_name}: ".AuditLog::fieldList(array_keys($changes)),
                     ['employee' => $employee, 'changes' => $changes]);
+            }
+            if ($statusChange) {
+                AuditLog::record('employee.status', ($employee->is_active ? 'Re-activated' : 'Deactivated')." employee {$employee->full_name} [{$employee->employee_no}]",
+                    ['employee' => $employee, 'changes' => ['is_active' => $statusChange]]);
             }
         });
 

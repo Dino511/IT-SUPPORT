@@ -44,6 +44,9 @@
         <strong><i class="bi bi-journal-text me-1" aria-hidden="true"></i>Activity</strong>
         <span class="small text-muted">{{ number_format($logs->total()) }} {{ Str::plural('entry', $logs->total()) }}{{ $filtered ? ' match your filters' : '' }}</span>
     </div>
+    @if($scope = \App\Support\CompanyScope::current())
+        <div class="px-3 py-2 small text-muted border-bottom"><i class="bi bi-funnel me-1" aria-hidden="true"></i>Showing activity for <b>{{ $scope->name }}</b> plus system-wide entries (sign-ins, user accounts, master data). Choose <b>All companies</b> in the sidebar to see every company's activity.</div>
+    @endif
     <div class="table-responsive">
         <table class="table log-table mb-0">
             <thead class="table-light">
@@ -62,8 +65,8 @@
                         <td><span class="log-time" title="{{ $log->created_at->format('M d, Y h:i:s A') }}">{{ $log->created_at->format('h:i:s A') }}<small>{{ $log->created_at->diffForHumans() }}</small></span></td>
                         <td>
                             <span class="who">
-                                <span class="avatar-xs {{ $log->user ? '' : 'system' }}" aria-hidden="true">{{ $log->user ? Str::of($log->user->name)->explode(' ')->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') : 'SY' }}</span>
-                                {{ $log->user?->name ?? 'System' }}
+                                <span class="avatar-xs {{ $log->user ? '' : 'system' }}" aria-hidden="true">{{ $log->user ? Str::of($log->user->name)->explode(' ')->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->implode('') : ($log->action === 'auth.failed' ? '?' : 'SY') }}</span>
+                                {{ $log->actor_name }}
                             </span>
                         </td>
                         <td><span class="action-pill text-bg-{{ $tone }}"><i class="bi {{ $icon }}" aria-hidden="true"></i>{{ $log->action_label }}</span></td>
@@ -82,7 +85,7 @@
                             @if($log->changes)
                                 <details><summary>View changes ({{ count($log->changes) }})</summary>
                                     <div class="changes">
-                                        @foreach($log->changes as $field => [$old, $new])<div><code>{{ $field }}</code>: {{ $old ?? '∅' }} → {{ $new ?? '∅' }}</div>@endforeach
+                                        @foreach($log->changes as $field => [$old, $new])<div><b>{{ \App\Models\AuditLog::fieldList([$field]) }}</b>: {{ \App\Models\AuditLog::displayValue($field, $old) }} → {{ \App\Models\AuditLog::displayValue($field, $new) }}</div>@endforeach
                                     </div>
                                 </details>
                             @endif

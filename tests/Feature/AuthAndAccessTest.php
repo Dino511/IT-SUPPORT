@@ -109,6 +109,6 @@ class AuthAndAccessTest extends TestCase
     {
         $this->actingAs($this->admin())->post(route('logout'))->assertRedirect(route('login'));
         $this->assertGuest();
-        $this->assertSame(0, AuditLog::where('action', 'auth.logout')->count()); // logout isn't a logged action
+        $this->assertSame(1, AuditLog::where('action', 'auth.logout')->count());
     }
 }

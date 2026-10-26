@@ -126,7 +126,7 @@ class MasterDataController extends Controller
         $company->save();
 
         if ($changes) {
-            AuditLog::record('company.updated', "Updated company {$company->name}: ".implode(', ', array_keys($changes)), ['changes' => $changes]);
+            AuditLog::record('company.updated', "Updated company {$company->name}: ".AuditLog::fieldList(array_keys($changes)), ['changes' => $changes]);
         }
 
         return back()->with('success', 'Company updated.');
@@ -155,7 +155,7 @@ class MasterDataController extends Controller
         $deviceType->save();
 
         if ($changes) {
-            AuditLog::record('device_type.updated', "Updated device type {$deviceType->name}: ".implode(', ', array_keys($changes))
+            AuditLog::record('device_type.updated', "Updated device type {$deviceType->name}: ".AuditLog::fieldList(array_keys($changes))
                 .(isset($changes['prefix']) ? '. New devices will be tagged '.$deviceType->prefix.'-NNNN; existing tags are unchanged' : ''),
                 ['changes' => $changes]);
         }

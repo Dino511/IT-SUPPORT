@@ -225,8 +225,11 @@ The sidebar switcher stores `company_scope` in the session. Lists, the dashboard
 ### 6.7 Audit log
 - Write entries **only** through `AuditLog::record($action, $description, $context)`.
 - `$context` can carry `device`, `employee` and `request` (so the entry appears on their pages) and `changes`.
-- Every action code must be listed in `AuditLog::ACTIONS`, which supplies the label and the filter dropdown. Its pill colour and icon come from `getActionStyleAttribute()`.
+- Every action code must be listed in `AuditLog::ACTIONS`, which supplies the label and the filter dropdown (a test fails if a `record()` call uses an unlisted code). Its pill colour and icon come from `getActionStyleAttribute()`.
 - Log rows are never updated or deleted.
+- **What is logged:** every change to devices (incl. status, assignment, PO files), employees, requests (filed, approved, rejected, completed, cancelled), user accounts, master data, companies and device types; sign-ins, sign-outs and **failed sign-ins** (with the reason: wrong password, unknown email, disabled account; the person signing in only sees a generic message); and CSV exports of the log itself. Page views are not logged.
+- Edits store `changes` as `[field => [old, new]]`, shown under "View changes". Use `AuditLog::fieldList()` for the field names in descriptions; labels and yes/no fields are in `AuditLog::FIELD_LABELS` / `BOOLEAN_FIELDS`. Passwords are never stored: a new password is its own `user.password_changed` entry. Activating/deactivating employees and enabling/disabling accounts are their own entries too (`employee.status`, `user.status`).
+- **Company view:** with a company selected, the page shows entries about that company's devices and employees **plus** everything system-wide: actions starting with `AuditLog::SYSTEM_WIDE` (`auth.`, `user.`, `audit.`) and entries linked to no device or employee (master data, companies, device types). See `AuditLogController::scoped()`.
 
 ### 6.8 Purchase order files
 Uploaded in the device form (`po_file`: pdf, jpg, png, doc(x), xls(x), max 10 MB). They are stored by `DeviceController::savePoFile()` at `storage/app/private/po/{device id}/…` and served only through the signed-in route `admin.devices.po-file`. Replacing or removing a file deletes the old one from disk and is logged. **Include `storage/app/private` in backups.**

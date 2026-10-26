@@ -61,17 +61,35 @@ class UserController extends Controller
             return back()->withInput()->with('error', 'You cannot remove your own Super Admin role or disable your own account.');
         }
 
-        // log which fields changed, but never the password value itself
+        // Log what changed, old -> new. A new password and enabling/disabling get
+        // their own entries (and the password value is never logged).
         $user->fill($data);
-        $changed = array_keys(collect($user->getDirty())->except(['password', 'remember_token'])->all());
-        if ($user->isDirty('password')) {
-            $changed[] = 'password';
+        $passwordChanged = $user->isDirty('password');
+        $changes = collect($user->getDirty())->except(['password', 'remember_token'])
+            ->mapWithKeys(fn ($new, $key) => [$key => [$user->getOriginal($key), $new]])->all();
+        $statusChange = $changes['is_active'] ?? null;
+        unset($changes['is_active']);
+        if (isset($changes['role'])) {
+            $changes['role'] = array_map(fn ($r) => User::ROLES[$r] ?? $r, $changes['role']);
+        }
+        if (array_key_exists('employee_id', $changes)) { // log names, not ids
+            $names = Employee::whereIn('id', array_filter($changes['employee_id']))->get()->pluck('full_name', 'id');
+            $changes['employee'] = array_map(fn ($id) => $names[$id] ?? null, $changes['employee_id']);
+            unset($changes['employee_id']);
         }
         $user->save();
 
-        if ($changed) {
-            AuditLog::record('user.updated', "Updated account {$user->name}: ".implode(', ', $changed)." (role: {$user->role_label}, ".($user->is_active ? 'active' : 'disabled').')',
-                ['employee' => $user->employee]);
+        $context = ['employee' => $user->employee];
+        if ($changes) {
+            AuditLog::record('user.updated', "Updated account {$user->name}: ".AuditLog::fieldList(array_keys($changes)),
+                $context + ['changes' => $changes]);
+        }
+        if ($passwordChanged) {
+            AuditLog::record('user.password_changed', "Changed the password of {$user->name} ({$user->email})", $context);
+        }
+        if ($statusChange) {
+            AuditLog::record('user.status', ($user->is_active ? 'Enabled' : 'Disabled')." the account of {$user->name} ({$user->email})",
+                $context + ['changes' => ['is_active' => $statusChange]]);
         }
 
         return redirect()->route('admin.users.index')->with('success', 'Account updated.');

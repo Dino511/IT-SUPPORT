@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\CompanyScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * Audit Logs page and CSV export (both roles). Read-only: entries are written
@@ -35,6 +36,16 @@ class AuditLogController extends Controller
     {
         $filename = 'audit-log-'.now()->format('Ymd-His').'.csv';
 
+        // exporting the trail is itself logged (counted before this entry is added)
+        $filters = collect($request->only(['q', 'action', 'user_id', 'from', 'to']))->filter()
+            ->map(fn ($v, $k) => "{$k}={$v}")->values();
+        if (CompanyScope::id()) {
+            $filters->prepend('company='.CompanyScope::current()?->code);
+        }
+        $count = $this->query($request)->count();
+        AuditLog::record('audit.exported', "Exported {$count} audit log ".Str::plural('entry', $count).' to CSV'
+            .($filters->isNotEmpty() ? ' ('.$filters->implode(', ').')' : ' (everything)'));
+
         return response()->streamDownload(function () use ($request) {
             $out = fopen('php://output', 'w');
             fputcsv($out, ['Date/Time', 'User', 'Action', 'Company', 'Asset Tag', 'Employee No', 'Employee', 'Request', 'Description', 'IP']);
@@ -42,7 +53,7 @@ class AuditLogController extends Controller
                 foreach ($logs as $log) {
                     fputcsv($out, [
                         $log->created_at?->format('Y-m-d H:i:s'),
-                        $log->user?->name ?? 'System',
+                        $log->actor_name,
                         $log->action_label,
                         $log->device?->company?->name ?? $log->employee?->company?->name,
                         $log->device?->asset_tag,
@@ -59,14 +70,22 @@ class AuditLogController extends Controller
     }
 
     /**
-     * Narrow logs to the selected company: entries about one of its devices
-     * or employees. Master data and account entries show under "All companies".
+     * Narrow logs to the selected company: entries about one of its devices or
+     * employees, plus everything that belongs to no company: sign-ins/outs,
+     * user accounts and exports (AuditLog::SYSTEM_WIDE) and entries linked to
+     * no device or employee (master data, companies, device types). So nothing
+     * system-wide is ever hidden by the company switcher.
      */
     public static function scoped(Builder $query): Builder
     {
-        return $query->when(CompanyScope::id(), fn ($q, $id) => $q->where(fn ($w) => $w
-            ->whereHas('device', fn ($d) => $d->where('company_id', $id))
-            ->orWhereHas('employee', fn ($e) => $e->where('company_id', $id))));
+        return $query->when(CompanyScope::id(), fn ($q, $id) => $q->where(function ($w) use ($id) {
+            $w->whereHas('device', fn ($d) => $d->where('company_id', $id))
+                ->orWhereHas('employee', fn ($e) => $e->where('company_id', $id))
+                ->orWhere(fn ($n) => $n->whereNull('device_id')->whereNull('employee_id'));
+            foreach (AuditLog::SYSTEM_WIDE as $prefix) {
+                $w->orWhere('action', 'like', $prefix.'%');
+            }
+        }));
     }
 
     /** Base query with the request's filters applied and relations eager-loaded. */

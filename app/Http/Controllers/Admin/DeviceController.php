@@ -135,7 +135,7 @@ class DeviceController extends Controller
             $device->save();
 
             if ($changes) {
-                AuditLog::record('device.updated', "Updated {$device->asset_tag}: ".implode(', ', array_keys($changes)),
+                AuditLog::record('device.updated', "Updated {$device->asset_tag}: ".AuditLog::fieldList(array_keys($changes)),
                     ['device' => $device, 'changes' => $changes]);
             }
 
