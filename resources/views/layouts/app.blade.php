@@ -175,7 +175,8 @@
             allowEmptyOption: false,
             // <select multiple> shows chips with an x to remove each one
             plugins: el.multiple ? ['remove_button'] : (el.required ? [] : ['clear_button']),
-            hidePlaceholder: el.multiple,
+            // the hint ("Select type...") disappears once something is chosen, single or multiple
+            hidePlaceholder: true,
             placeholder: el.dataset.placeholder || (canCreate ? 'Search or add...' : 'Search...'),
             render: {
                 option_create: (data, escape) => `<div class="create">+ Add <strong>${escape(data.input)}</strong> to master data</div>`,
